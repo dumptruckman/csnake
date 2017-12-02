@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <sys/wait.h>
+#include <stdlib.h>
 
 #include "socket.h"
 #include "common.h"
@@ -44,7 +45,8 @@ void read_responses(int client_fd) {
         }
 
         if (events.revents & POLLIN) {
-            read(client_fd, message, MAX_MESSAGE_SIZE);
+            int read_amount = read(client_fd, message, MAX_MESSAGE_SIZE);
+            message[read_amount] = '\0';
             printf("Received: %s\n", message);
             fflush(stdout);
         }
@@ -53,7 +55,9 @@ void read_responses(int client_fd) {
 
 void user_input(int client_fd) {
     char input[MAX_MESSAGE_SIZE];
+    input[0] = '\0';
 
+    // This pattern looks funny but it is correct
     while (scanf("%" STR(MAX_MESSAGE_SIZE) "[^\n]%*c", input) > 0) {
         if (!strcmp(input, "exit")) {
             break;
@@ -65,14 +69,16 @@ void user_input(int client_fd) {
             log_error("user_input: write error: %s", strerror(errno));
         } else if (result != amount_to_write) {
             log_error("user_input: Could not write full message to socket");
-            char sent_message[amount_to_write];
-            strncpy(sent_message, input, (size_t) result);
+            char *sent_message = malloc(amount_to_write + 1);
+            strncpy(sent_message, input, (size_t) amount_to_write);
             printf("Sent: %s\n", sent_message);
             fflush(stdout);
+            free(sent_message);
         } else {
             printf("Sent: %s\n", input);
             fflush(stdout);
         }
+        input[0] = '\0';
     }
 
     kill(pid, SIGUSR1);
