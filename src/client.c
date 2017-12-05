@@ -11,15 +11,17 @@
 #include "common.h"
 #include "log.h"
 
-volatile bool_t running = true;
-int pid;
+static volatile bool_t running = true;
 
-void exit_handler(int signo) {
+static int parent_pid;
+static int child_pid;
+
+static void exit_handler(int signo) {
     log_info("exit_handler: SIGUSR1 received");
     running = false;
 }
 
-void read_responses(int client_fd) {
+static void read_responses(int client_fd) {
     signal(SIGUSR1, exit_handler);
 
     struct pollfd events;
@@ -45,7 +47,11 @@ void read_responses(int client_fd) {
         }
 
         if (events.revents & POLLIN) {
-            int read_amount = read(client_fd, message, MAX_MESSAGE_SIZE);
+            ssize_t read_amount = read(client_fd, message, MAX_MESSAGE_SIZE);
+            if (read_amount == 0) {
+                log_info("read_responses: Server has shut down.");
+                break;
+            }
             message[read_amount] = '\0';
             printf("Received: %s\n", message);
             fflush(stdout);
@@ -53,7 +59,19 @@ void read_responses(int client_fd) {
     }
 }
 
-void user_input(int client_fd) {
+static void child_handler(int dummy) {
+
+}
+
+static void user_input(int client_fd) {
+    // Set up a SIGCHLD handler that will not resume the interrupted action.
+    struct sigaction signal_action;
+    signal_action.sa_handler = child_handler;
+    signal_action.sa_flags = 0;
+    sigemptyset(&signal_action.sa_mask);
+    sigaction(SIGCHLD, &signal_action, NULL);
+
+
     char input[MAX_MESSAGE_SIZE];
     input[0] = '\0';
 
@@ -81,14 +99,16 @@ void user_input(int client_fd) {
         input[0] = '\0';
     }
 
-    kill(pid, SIGUSR1);
+    kill(child_pid, SIGUSR1);
 }
 
 void run_client(char *host, unsigned short port_num) {
     int client_fd = connect_socket(host, port_num);
 
-    pid = fork();
-    if (pid == 0) {
+    parent_pid = getpid();
+
+    child_pid = fork();
+    if (child_pid == 0) {
         read_responses(client_fd);
     } else {
         user_input(client_fd);

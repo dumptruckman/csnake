@@ -116,13 +116,6 @@ int listen_socket(const char *host, unsigned short port_num) {
             continue;
         }
 
-        // int opt = 1;
-        // if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, 1)) {
-        //     log_error("listen_socket: setsockopt error: %s", strerror(errno));
-        //     close(listen_fd);
-        //     continue;
-        // }
-
         if (bind(listen_fd, current_address->ai_addr, current_address->ai_addrlen)) {
             log_error("listen_socket: bind error: %s", strerror (errno));
             close(listen_fd);

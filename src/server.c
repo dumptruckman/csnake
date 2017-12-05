@@ -16,35 +16,45 @@
 
 #define MAX_CLIENTS 30
 
-GSList *clients = NULL;
-pthread_mutex_t clients_mutex;
-volatile bool_t running = true;
+static GSList *clients = NULL;
+static pthread_mutex_t clients_mutex;
+static volatile bool_t running = true;
+
+static int server_socket;
 
 typedef struct {
     int originator_fd;
     char *message;
 } message_data_t;
 
-static void interrupt_handler(int ignore) {
-    log_info("interrupt_handler: SIGINT received");
-    running = false;
-}
-
 static void send_message(gpointer data, gpointer user_data) {
+    // Extract the desired types from the arguments.
     client_t *client = (client_t *) data;
     message_data_t *message_data = (message_data_t *) user_data;
 
     if (message_data->originator_fd == client->client_socket) {
         // Don't send the message to the client the message came from.
-        log_info("NOT sending \"%s\" from [%d] to fd [%d]", message_data->message, message_data->originator_fd, client->client_socket);
+        log_info("send_message: NOT sending \"%s\" from [%d] to fd [%d]", message_data->message, message_data->originator_fd, client->client_socket);
         return;
     }
 
-    log_info("Sending \"%s\" from [%d] to fd [%d]", message_data->message, message_data->originator_fd, client->client_socket);
+    log_info("send_message: Sending \"%s\" from [%d] to [%d]", message_data->message, message_data->originator_fd, client->client_socket);
     write(client->client_socket, message_data->message, strlen(message_data->message));
 }
 
+static void client_signal_handler(int dummy) {
+    log_debug("A client received SIGUSR1");
+}
+
 static void *accept_client(void *client_ptr) {
+    // Block SIGINT since the main thread takes care of that.
+    sigset_t signal_mask;
+    sigemptyset(&signal_mask);
+    sigaddset(&signal_mask, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &signal_mask, NULL);
+
+    signal(SIGUSR1, client_signal_handler);
+
     client_t *client = (client_t *) client_ptr;
     char message[MAX_MESSAGE_SIZE];
 
@@ -52,9 +62,14 @@ static void *accept_client(void *client_ptr) {
         log_debug("accept_client: Awaiting messages from [%d]", client->client_socket);
 
         // Block until client sends data.
-        int read_amount;
+        ssize_t read_amount;
         if ((read_amount = read(client->client_socket, message, MAX_MESSAGE_SIZE)) < 0) {
             log_error("accept_client: read error: %s", strerror(errno));
+            if (errno == EINTR) {
+                // Thread was interrupted by main thread. Continuing will check running to see if shutdown should occur.
+                // A signal handler may be necessary for this.
+                continue;
+            }
         } else if (read_amount == 0) {
             log_info("accept_client: client [%d] disconnected", client->client_socket);
             break;
@@ -63,10 +78,10 @@ static void *accept_client(void *client_ptr) {
         // Set the length of the string to how many bytes were read.
         message[read_amount] = '\0';
 
-        printf("recv: %s\n", message);
+        log_info("accept_client: Receiving \"%s\" from [%d]\n", message, client->client_socket);
 
         // Make message copy
-        char *message_ptr = malloc(read_amount + 1);
+        char *message_ptr = malloc((size_t) read_amount + 1);
         strcpy(message_ptr, message);
 
         // Initialize message data struct
@@ -74,7 +89,6 @@ static void *accept_client(void *client_ptr) {
         message_data.message = message_ptr;
         message_data.originator_fd = client->client_socket;
 
-        // Send the message to each client
         pthread_mutex_lock(&clients_mutex);
         // Forward the message to each of the other clients
         g_slist_foreach(clients, send_message, (gpointer) &message_data);
@@ -85,8 +99,8 @@ static void *accept_client(void *client_ptr) {
 
     log_info("accept_client: Shutting down client [%d]", client->client_socket);
 
-    // Remove the finished client from the global client list
     pthread_mutex_lock(&clients_mutex);
+    // Remove the finished client from the global client list
     clients = g_slist_remove(clients, client);
     pthread_mutex_unlock(&clients_mutex);
 
@@ -96,22 +110,49 @@ static void *accept_client(void *client_ptr) {
     return NULL;
 }
 
-static void shutdown_client(gpointer data, gpointer ignore) {
+static void shutdown_client(gpointer data, gpointer dummy) {
     client_t *client = (client_t *) data;
 
     log_info("shutdown_client: Disconnecting client [%d]", client->client_socket);
-    close(client->client_socket);
-    pthread_join(client->client_thread);
+    //pthread_kill(client->client_thread, SIGUSR1);
+    shutdown(client->client_socket, SHUT_RD);
+
+    // Main thread should wait until client shuts down.
+    pthread_join(client->client_thread, NULL);
+}
+
+static void interrupt_handler(int dummy) {
+    log_info("interrupt_handler: SIGINT received. Shutting down server...");
+    running = false;
+
+    log_debug("run_server: Copying client list");
+    pthread_mutex_lock(&clients_mutex);
+    GSList *clients_copy = g_slist_copy(clients);
+    pthread_mutex_unlock(&clients_mutex);
+
+    log_info("run_server: Attempting to shut down all clients");
+    // Shutdown the clients using a copy of the client list to avoid deadlock and potential other issues.
+    g_slist_foreach(clients_copy, shutdown_client, NULL);
+
+    close(server_socket);
 }
 
 void run_server(char *host, unsigned short port_num) {
+    signal(SIGINT, interrupt_handler);
+
     // Open a socket for listening.
-    int server_socket = listen_socket(host, port_num);
+    server_socket = listen_socket(host, port_num);
+
+    if (server_socket == -1) {
+        log_error("run_server: Could not open server socket.");
+        return;
+    }
 
     struct sockaddr_in client_address;
     socklen_t client_length = sizeof(client_address);
 
     while (running) {
+        log_debug("run_server: Awaiting connections");
         // Block until client connection received.
         int client_socket = accept(server_socket, (struct sockaddr *) &client_address, &client_length);
         if (client_socket < 0) {
@@ -137,5 +178,5 @@ void run_server(char *host, unsigned short port_num) {
                  client_socket);
     }
 
-    close(server_socket);
+    log_info("run_server: Server shutdown complete.");
 }

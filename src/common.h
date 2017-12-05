@@ -10,6 +10,6 @@
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-typedef enum { false, true } bool_t;
+typedef volatile enum { false, true } bool_t;
 
 #endif //CSNAKE_COMMON_H
