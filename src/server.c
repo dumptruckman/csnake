@@ -8,6 +8,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <ncurses.h>
 
 #include "client.h"
 #include "socket.h"
@@ -18,7 +19,7 @@
 
 static GSList *clients = NULL;
 static pthread_mutex_t clients_mutex;
-static volatile bool_t running = true;
+static volatile bool running = true;
 
 static int server_socket;
 

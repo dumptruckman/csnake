@@ -6,12 +6,13 @@
 #include <poll.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "socket.h"
 #include "common.h"
 #include "log.h"
 
-static volatile bool_t running = true;
+static volatile bool running = true;
 
 static int parent_pid;
 static int child_pid;

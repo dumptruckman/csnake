@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -std=gnu99 -Wall -g $(shell pkg-config --cflags glib-2.0)
 
 LINKER = gcc
-LFLAGS = -Wall -pthread
+LFLAGS = -Wall -pthread -lncurses
 LIBS = $(shell pkg-config --libs glib-2.0)
 
 SRCDIR = src
