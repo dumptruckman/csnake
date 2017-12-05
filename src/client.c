@@ -11,7 +11,7 @@
 #include "common.h"
 #include "log.h"
 
-bool_t running = true;
+volatile bool_t running = true;
 int pid;
 
 void exit_handler(int signo) {
