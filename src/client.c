@@ -7,17 +7,22 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <ncurses.h>
+#include <netinet/in.h>
 
 #include "socket.h"
 #include "common.h"
 #include "log.h"
+#include "messages.h"
 
 static volatile bool running = true;
 
 static int parent_pid;
 static int child_pid;
 
-static void exit_handler(int signo) {
+static WINDOW *main_window;
+
+static void exit_handler(int dummy) {
     log_info("exit_handler: SIGUSR1 received");
     running = false;
 }
@@ -60,9 +65,7 @@ static void read_responses(int client_fd) {
     }
 }
 
-static void child_handler(int dummy) {
-
-}
+static void child_handler(int dummy) { }
 
 static void user_input(int client_fd) {
     // Set up a SIGCHLD handler that will not resume the interrupted action.
@@ -72,39 +75,58 @@ static void user_input(int client_fd) {
     sigemptyset(&signal_action.sa_mask);
     sigaction(SIGCHLD, &signal_action, NULL);
 
+    int input_key;
+    void *message;
 
-    char input[MAX_MESSAGE_SIZE];
-    input[0] = '\0';
+    while (running) {
+        clear();
+        input_key = getch();
 
-    // This pattern looks funny but it is correct
-    while (scanf("%" STR(MAX_MESSAGE_SIZE) "[^\n]%*c", input) > 0) {
-        if (!strcmp(input, "exit")) {
-            break;
+        if (input_key < 0) {
+            if (errno == EINTR) {
+                // Server shut down
+                break;
+            }
         }
 
-        size_t amount_to_write = strlen(input);
-        ssize_t result = write(client_fd, input, amount_to_write);
-        if (result < 0) {
-            log_error("user_input: write error: %s", strerror(errno));
-        } else if (result != amount_to_write) {
-            log_error("user_input: Could not write full message to socket");
-            char *sent_message = malloc(amount_to_write + 1);
-            strncpy(sent_message, input, (size_t) amount_to_write);
-            printf("Sent: %s\n", sent_message);
-            fflush(stdout);
-            free(sent_message);
-        } else {
-            printf("Sent: %s\n", input);
-            fflush(stdout);
+        log_debug("user_input: Read key %d", input_key);
+
+        switch (input_key) {
+            case KEY_UP:
+            case KEY_DOWN:
+            case KEY_LEFT:
+            case KEY_RIGHT:
+                message = malloc(sizeof(msg_client_keypress));
+                ((msg_client_keypress *) message)->key_code = (uint32_t) input_key;
+                send_message(client_fd, MSG_CLIENT_KEYPRESS, message);
+                free(message);
+                break;
+            case 27: // Escape - quit program
+                message = malloc(sizeof(msg_client_keypress));
+                ((msg_client_keypress *) message)->key_code = (uint32_t) input_key;
+                send_message(client_fd, MSG_CLIENT_KEYPRESS, message);
+                free(message);
+                kill(child_pid, SIGUSR1);
+                return;
+            default:
+                break;
         }
-        input[0] = '\0';
     }
-
-    kill(child_pid, SIGUSR1);
 }
 
 void run_client(char *host, unsigned short port_num) {
     int client_fd = connect_socket(host, port_num);
+    if (client_fd < 0) {
+        log_error("run_client: Could not connect to server %s:%d", host, port_num);
+        return;
+    }
+
+    filter();
+    newterm(NULL, stdin, stdout);
+    keypad(stdscr, TRUE);
+    //main_window = initscr();
+    //noecho();
+    //curs_set(FALSE);
 
     parent_pid = getpid();
 
@@ -117,6 +139,7 @@ void run_client(char *host, unsigned short port_num) {
         if (wait(&status) < 0) {
             log_error("run_client: wait error: %s", strerror(errno));
         }
+        endwin();
     }
 
     close(client_fd);

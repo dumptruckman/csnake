@@ -10,4 +10,7 @@
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
+#define WIDTH 38
+#define HEIGHT 20
+
 #endif //CSNAKE_COMMON_H

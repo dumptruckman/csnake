@@ -137,3 +137,63 @@ int listen_socket(const char *host, unsigned short port_num) {
     freeaddrinfo(address);
     return -1;
 }
+
+static char * string_to_hex(const char * string, size_t size) {
+    char *result = malloc(size * 2 + 1);
+    char *buffer = result;
+    for (size_t i = 0; i < size; i ++) {
+        sprintf(buffer, "%02X", string[i]);
+        buffer += 2;
+    }
+    buffer[0] = '\0';
+    return result;
+}
+
+ssize_t ssend(int fd, void *message, size_t size) {
+    size_t left = size;
+    ssize_t written_amount;
+
+    char *hex = string_to_hex(message, size);
+    log_debug("ssend: Sending hex data: %s", hex);
+    free(hex);
+
+    do {
+        log_debug("ssend: Sending %d bytes", left);
+        written_amount = write(fd, message, left);
+        if (written_amount < 0) {
+            log_error("ssend: write error: %s", strerror(errno));
+            return written_amount;
+        } else if (written_amount == 0) {
+            return written_amount;
+        } else {
+            message += written_amount;
+            left -= written_amount;
+        }
+    } while (left > 0);
+}
+
+ssize_t srecv(int fd, void *buffer, size_t size) {
+    unsigned char *read_buffer = (unsigned char *) buffer;
+    size_t left = size;
+    ssize_t read_amount;
+    do {
+        log_debug("srecv: Reading %d bytes", left);
+
+        read_amount = read(fd, read_buffer, left);
+        if (read_amount < 0) {
+            log_error("srecv: read error: %s", strerror(errno));
+            return read_amount;
+        } else if (read_amount == 0) {
+            return read_amount;
+        } else {
+            read_buffer += read_amount;
+            left -= read_amount;
+        }
+    } while (left > 0);
+
+    char *hex = string_to_hex(buffer, size);
+    log_debug("srecv: Received hex data: %s", hex);
+    free(hex);
+
+    return size;
+}

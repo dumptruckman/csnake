@@ -9,7 +9,7 @@ link_directories(${GLIB_LIBRARY_DIRS})
 
 set(CMAKE_C_STANDARD 99)
 
-set(SOURCE_FILES src/main.c src/log.c src/log.h src/socket.c src/socket.h src/common.c src/common.h src/server.c src/server.h src/client.c src/client.h)
+set(SOURCE_FILES src/main.c src/log.c src/log.h src/socket.c src/socket.h src/common.c src/common.h src/server.c src/server.h src/client.c src/client.h src/messages.c src/messages.h)
 
 add_executable(csnake ${SOURCE_FILES})
 add_definitions(${GLIB_CFLAGS_OTHER})

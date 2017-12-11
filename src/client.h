@@ -10,6 +10,7 @@
 typedef struct {
     int client_socket;
     pthread_t client_thread;
+    int16_t x, y;
 } client_t;
 
 void run_client(char *host, unsigned short port_num);
