@@ -93,6 +93,16 @@ static void read_messages(int client_fd) {
                 }
 
                 log_info("read_messages: Received snake update for %d", message->snake.player_id);
+            } else if (message_type == MSG_CLIENT_DISCONNECT) {
+                msg_client_disconnect *message = (msg_client_disconnect *) *message_ptr;
+                GSList *existing_snake = g_slist_find_custom(players, &(message->player_id),
+                                                             (GCompareFunc) snake_has_same_id);
+                if (existing_snake) {
+                    players = g_slist_remove(players, existing_snake[0].data);
+                    log_info("read_messages: Player %d disconnected.", message->player_id);
+                } else {
+                    log_error("read_messages: Received disconnect from unknown player %d", message->player_id);
+                }
             } else {
                 log_error("read_messages: Received unknown message type %d", message_type);
             }
@@ -130,9 +140,10 @@ static void user_input(int client_fd) {
                 // Server shut down
                 break;
             }
+            log_error("user_input: getch error: %s", strerror(errno));
+        } else {
+            log_debug("user_input: Read key %d", input_key);
         }
-
-        log_debug("user_input: Read key %d", input_key);
 
         switch (input_key) {
             case KEY_UP:
@@ -157,6 +168,26 @@ static void user_input(int client_fd) {
     }
 }
 
+static void initialize_screen() {
+    if (DEBUG) {
+        filter();
+        newterm(NULL, stdin, stdout);
+    } else {
+        main_window = initscr();
+        noecho();
+        curs_set(FALSE);
+    }
+    keypad(stdscr, TRUE);
+}
+
+static void finalize_screen() {
+    if (DEBUG) {
+        endwin();
+    } else {
+        endwin();
+    }
+}
+
 void run_client(char *host, unsigned short port_num) {
     int client_fd = connect_socket(host, port_num);
     if (client_fd < 0) {
@@ -164,12 +195,7 @@ void run_client(char *host, unsigned short port_num) {
         return;
     }
 
-//    filter();
-//    newterm(NULL, stdin, stdout);
-    main_window = initscr();
-    noecho();
-    curs_set(FALSE);
-    keypad(stdscr, TRUE);
+    initialize_screen();
 
     parent_pid = getpid();
 
@@ -182,7 +208,7 @@ void run_client(char *host, unsigned short port_num) {
         if (wait(&status) < 0) {
             log_error("run_client: wait error: %s", strerror(errno));
         }
-        endwin();
+        finalize_screen();
     }
 
     close(client_fd);

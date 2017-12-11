@@ -1,7 +1,9 @@
 TARGET = csnake
 
+DEBUG ?= 0
+
 CC = gcc
-CFLAGS = -std=gnu99 -Wall -g $(shell pkg-config --cflags glib-2.0)
+CFLAGS = -std=gnu99 -Wall -g $(shell pkg-config --cflags glib-2.0) -DDEBUG=$(DEBUG)
 
 LINKER = gcc
 LFLAGS = -Wall -pthread -lncurses

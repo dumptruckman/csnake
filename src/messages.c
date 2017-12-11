@@ -40,6 +40,8 @@ static size_t get_message_size(message_t message_type) {
             return sizeof(msg_snake_update) + 1;
         case MSG_CLIENT_KEYPRESS:
             return sizeof(msg_client_keypress) + 1;
+        case MSG_CLIENT_DISCONNECT:
+            return sizeof(msg_client_disconnect) + 1;
         default:
             log_error("get_message_size: Unknown message type %d", message_type);
             return 0;
@@ -55,6 +57,11 @@ static unsigned char * serialize_msg_snake_update(unsigned char *buffer, msg_sna
 
 static unsigned char * serialize_msg_client_keypress(unsigned char *buffer, msg_client_keypress *message) {
     buffer = serialize_int(buffer, message->key_code);
+    return buffer;
+}
+
+static unsigned char * serialize_msg_client_disconnect(unsigned char *buffer, msg_client_disconnect *message) {
+    buffer = serialize_int(buffer, message->player_id);
     return buffer;
 }
 
@@ -78,6 +85,9 @@ static unsigned char * serialize_message(size_t *size, message_t message_type, v
             break;
         case MSG_CLIENT_KEYPRESS:
             buffer = serialize_msg_client_keypress(buffer, (msg_client_keypress *) message_ptr);
+            break;
+        case MSG_CLIENT_DISCONNECT:
+            buffer = serialize_msg_client_disconnect(buffer, (msg_client_disconnect *) message_ptr);
             break;
         default:
             free(buffer);
@@ -114,7 +124,7 @@ static const unsigned char * deserialize_int(const unsigned char *message, uint3
     return message + 4;
 }
 
-static msg_snake_update *deserialize_msg_snake_update(const unsigned char *message_ptr) {
+static msg_snake_update * deserialize_msg_snake_update(const unsigned char *message_ptr) {
     msg_snake_update *message = malloc(sizeof(msg_snake_update));
     message_ptr = deserialize_int(message_ptr, &(message->snake.player_id));
     message_ptr = deserialize_short(message_ptr, (uint16_t *) &(message->snake.x));
@@ -122,9 +132,15 @@ static msg_snake_update *deserialize_msg_snake_update(const unsigned char *messa
     return message;
 }
 
-static msg_client_keypress *deserialize_msg_client_keypress(const unsigned char *message_ptr) {
+static msg_client_keypress * deserialize_msg_client_keypress(const unsigned char *message_ptr) {
     msg_client_keypress *message = malloc(sizeof(msg_client_keypress));
     deserialize_int(message_ptr, &(message->key_code));
+    return message;
+}
+
+static msg_client_disconnect * deserialize_msg_client_disconnect(const unsigned char *message_ptr) {
+    msg_client_disconnect *message = malloc(sizeof(msg_client_disconnect));
+    deserialize_int(message_ptr, &(message->player_id));
     return message;
 }
 
@@ -134,6 +150,8 @@ static void * deserialize_message(message_t message_type, const unsigned char *m
             return deserialize_msg_snake_update(message_ptr);
         case MSG_CLIENT_KEYPRESS:
             return deserialize_msg_client_keypress(message_ptr);
+        case MSG_CLIENT_DISCONNECT:
+            return deserialize_msg_client_disconnect(message_ptr);
         default:
             log_error("deserialize_message: Impossible message type.");
             return NULL;

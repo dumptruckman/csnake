@@ -14,3 +14,7 @@
 #define HEIGHT 20
 
 #endif //CSNAKE_COMMON_H
+
+#ifndef DEBUG
+#define DEBUG 0
+#endif

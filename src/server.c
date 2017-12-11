@@ -33,6 +33,12 @@ static void update_snake(client_t *connected_client, client_t *changed_client) {
     send_message(connected_client->client_socket, MSG_SNAKE_UPDATE, &message);
 }
 
+static void send_client_disconnect(client_t *connected_client, client_t *disconnect_client) {
+    msg_client_disconnect message;
+    message.player_id = (uint32_t) disconnect_client->client_socket;
+    send_message(connected_client->client_socket, MSG_CLIENT_DISCONNECT, &message);
+}
+
 static void *accept_client(void *client_ptr) {
     // Block SIGINT since the main thread takes care of that.
     sigset_t signal_mask;
@@ -114,8 +120,10 @@ static void *accept_client(void *client_ptr) {
     log_info("accept_client: Shutting down client [%d]", client->client_socket);
 
     pthread_mutex_lock(&clients_mutex);
-    // Remove the finished client from the global client list
+    // Remove the finished client from the global client list.
     clients = g_slist_remove(clients, client);
+    // Inform remaining clients of this disconnect.
+    g_slist_foreach(clients, (GFunc) send_client_disconnect, client);
     pthread_mutex_unlock(&clients_mutex);
 
     close(client->client_socket);
