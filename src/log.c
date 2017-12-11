@@ -114,7 +114,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
     va_end(args);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "\n\r"); // TODO \r is temp fix for ncurses
   }
 
   /* Log to file */

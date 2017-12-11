@@ -11,6 +11,7 @@
 #include "messages.h"
 #include "log.h"
 #include "socket.h"
+#include "snake.h"
 
 static unsigned char * serialize_char(unsigned char *buffer, uint8_t value) {
     buffer[0] = value;
@@ -35,14 +36,26 @@ static unsigned char * serialize_int(unsigned char *buffer, uint32_t value) {
 static size_t get_message_size(message_t message_type) {
     // 1 must be added to the size to accommodate for null terminator.
     switch (message_type) {
-        case MSG_CLIENT_CONNECTED:
-            return sizeof(msg_client_connected) + 1;
+        case MSG_SNAKE_UPDATE:
+            return sizeof(msg_snake_update) + 1;
         case MSG_CLIENT_KEYPRESS:
             return sizeof(msg_client_keypress) + 1;
         default:
             log_error("get_message_size: Unknown message type %d", message_type);
             return 0;
     }
+}
+
+static unsigned char * serialize_msg_snake_update(unsigned char *buffer, msg_snake_update *message) {
+    buffer = serialize_int(buffer, message->snake.player_id);
+    buffer = serialize_short(buffer, (uint16_t) message->snake.x);
+    buffer = serialize_short(buffer, (uint16_t) message->snake.y);
+    return buffer;
+}
+
+static unsigned char * serialize_msg_client_keypress(unsigned char *buffer, msg_client_keypress *message) {
+    buffer = serialize_int(buffer, message->key_code);
+    return buffer;
 }
 
 static unsigned char * serialize_message(size_t *size, message_t message_type, void *message_ptr) {
@@ -60,13 +73,11 @@ static unsigned char * serialize_message(size_t *size, message_t message_type, v
     log_debug("serialize_message: Serialized message type key as '%c'", original_buffer[0]);
 
     switch (message_type) {
-        case MSG_CLIENT_CONNECTED:
-            buffer = serialize_int(buffer, *(uint32_t *) (message_ptr));
-            buffer = serialize_short(buffer, *(uint16_t *) (message_ptr + sizeof(uint32_t)));
-            buffer = serialize_short(buffer, *(uint16_t *) (message_ptr + sizeof(uint32_t) + sizeof(int16_t)));
+        case MSG_SNAKE_UPDATE:
+            buffer = serialize_msg_snake_update(buffer, (msg_snake_update *) message_ptr);
             break;
         case MSG_CLIENT_KEYPRESS:
-            buffer = serialize_int(buffer, *(uint32_t *) (message_ptr));
+            buffer = serialize_msg_client_keypress(buffer, (msg_client_keypress *) message_ptr);
             break;
         default:
             free(buffer);
@@ -103,11 +114,11 @@ static const unsigned char * deserialize_int(const unsigned char *message, uint3
     return message + 4;
 }
 
-static msg_client_connected *deserialize_msg_client_connected(const unsigned char *message_ptr) {
-    msg_client_connected *message = malloc(sizeof(msg_client_connected));
-    message_ptr = deserialize_int(message_ptr, &(message->client_fd));
-    message_ptr = deserialize_short(message_ptr, (uint16_t *) &(message->init_x));
-    deserialize_short(message_ptr, (uint16_t *) &(message->init_x));
+static msg_snake_update *deserialize_msg_snake_update(const unsigned char *message_ptr) {
+    msg_snake_update *message = malloc(sizeof(msg_snake_update));
+    message_ptr = deserialize_int(message_ptr, &(message->snake.player_id));
+    message_ptr = deserialize_short(message_ptr, (uint16_t *) &(message->snake.x));
+    deserialize_short(message_ptr, (uint16_t *) &(message->snake.y));
     return message;
 }
 
@@ -119,8 +130,8 @@ static msg_client_keypress *deserialize_msg_client_keypress(const unsigned char 
 
 static void * deserialize_message(message_t message_type, const unsigned char *message_ptr) {
     switch (message_type) {
-        case MSG_CLIENT_CONNECTED:
-            return deserialize_msg_client_connected(message_ptr);
+        case MSG_SNAKE_UPDATE:
+            return deserialize_msg_snake_update(message_ptr);
         case MSG_CLIENT_KEYPRESS:
             return deserialize_msg_client_keypress(message_ptr);
         default:

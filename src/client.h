@@ -6,11 +6,12 @@
 #define CSNAKE_CLIENT_H
 
 #include <pthread.h>
+#include "snake.h"
 
 typedef struct {
     int client_socket;
     pthread_t client_thread;
-    int16_t x, y;
+    snake_t snake;
 } client_t;
 
 void run_client(char *host, unsigned short port_num);

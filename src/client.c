@@ -14,6 +14,7 @@
 #include "common.h"
 #include "log.h"
 #include "messages.h"
+#include "snake.h"
 
 static volatile bool running = true;
 
@@ -22,46 +23,88 @@ static int child_pid;
 
 static WINDOW *main_window;
 
+static GSList *players = NULL;
+
 static void exit_handler(int dummy) {
     log_info("exit_handler: SIGUSR1 received");
     running = false;
 }
 
-static void read_responses(int client_fd) {
+static void draw_snake(snake_t *snake) {
+    mvprintw(snake->y, snake->x, "O");
+}
+
+static void update_game_board() {
+    clear();
+    g_slist_foreach(players, (GFunc) draw_snake, NULL);
+    refresh();
+}
+
+static int snake_has_same_id(const snake_t *snake, const uint32_t *player_id) {
+    return snake->player_id - *player_id;
+}
+
+static void read_messages(int client_fd) {
     signal(SIGUSR1, exit_handler);
 
     struct pollfd events;
     events.fd = client_fd;
     events.events = POLL_IN;
 
-    char message[MAX_MESSAGE_SIZE];
-
     while (running) {
         poll(&events, 1, 50);
 
         if (events.revents & POLLERR) {
-            log_error("read_responses: client socket unexpectedly closed.");
+            log_error("read_messages: client socket unexpectedly closed.");
             return;
         }
         if (events.revents & POLLHUP) {
-            log_error("read_responses: the server has hung up.");
+            log_error("read_messages: the server has hung up.");
             return;
         }
         if (events.revents & POLLNVAL) {
-            log_error("read_responses: client socket is not open.");
+            log_error("read_messages: client socket is not open.");
             return;
         }
 
         if (events.revents & POLLIN) {
-            ssize_t read_amount = read(client_fd, message, MAX_MESSAGE_SIZE);
+            message_t message_type;
+            void **message_ptr = malloc(sizeof(void *));
+            ssize_t read_amount = recv_message(client_fd, &message_type, message_ptr);
             if (read_amount == 0) {
-                log_info("read_responses: Server has shut down.");
+                log_info("read_messages: Server has shut down.");
                 break;
             }
-            message[read_amount] = '\0';
-            printf("Received: %s\n", message);
-            fflush(stdout);
+
+            if (message_type == MSG_SNAKE_UPDATE) {
+                msg_snake_update *message = (msg_snake_update *) *message_ptr;
+                GSList *existing_snake = g_slist_find_custom(players, &(message->snake.player_id),
+                                                             (GCompareFunc) snake_has_same_id);
+                if (existing_snake) {
+                    snake_t *snake = existing_snake[0].data;
+                    snake->x = message->snake.x;
+                    snake->y = message->snake.y;
+                } else {
+                    snake_t *snake = malloc(sizeof(snake_t));
+                    snake->player_id = message->snake.player_id;
+                    snake->x = message->snake.x;
+                    snake->y = message->snake.y;
+                    players = g_slist_append(players, snake);
+                }
+
+                log_info("read_messages: Received snake update for %d", message->snake.player_id);
+            } else {
+                log_error("read_messages: Received unknown message type %d", message_type);
+            }
+
+            if (*message_ptr) {
+                free(*message_ptr);
+            }
+            free(message_ptr);
+
+            update_game_board();
         }
+
     }
 }
 
@@ -121,18 +164,18 @@ void run_client(char *host, unsigned short port_num) {
         return;
     }
 
-    filter();
-    newterm(NULL, stdin, stdout);
+//    filter();
+//    newterm(NULL, stdin, stdout);
+    main_window = initscr();
+    noecho();
+    curs_set(FALSE);
     keypad(stdscr, TRUE);
-    //main_window = initscr();
-    //noecho();
-    //curs_set(FALSE);
 
     parent_pid = getpid();
 
     child_pid = fork();
     if (child_pid == 0) {
-        read_responses(client_fd);
+        read_messages(client_fd);
     } else {
         user_input(client_fd);
         int status;

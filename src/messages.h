@@ -7,15 +7,14 @@
 
 #include <stdint.h>
 #include <glib.h>
+#include "snake.h"
 
 typedef uint8_t message_t;
 
 typedef struct {
-    uint32_t client_fd;
-    int16_t init_x;
-    int16_t init_y;
-} msg_client_connected;
-#define MSG_CLIENT_CONNECTED 0
+    snake_t snake;
+} msg_snake_update;
+#define MSG_SNAKE_UPDATE 0
 
 typedef struct {
     uint32_t key_code;

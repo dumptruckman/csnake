@@ -15,6 +15,7 @@
 #include "common.h"
 #include "log.h"
 #include "messages.h"
+#include "snake.h"
 
 static GSList *clients = NULL;
 static pthread_mutex_t clients_mutex;
@@ -24,6 +25,12 @@ static int server_socket;
 
 static void client_signal_handler(int dummy) {
     log_debug("A client received SIGUSR1");
+}
+
+static void update_snake(client_t *connected_client, client_t *changed_client) {
+    msg_snake_update message;
+    message.snake = changed_client->snake;
+    send_message(connected_client->client_socket, MSG_SNAKE_UPDATE, &message);
 }
 
 static void *accept_client(void *client_ptr) {
@@ -64,25 +71,35 @@ static void *accept_client(void *client_ptr) {
                 log_info("accept_client: Client [%d] disconnected", client->client_socket);
                 break;
             }
+            bool snake_changed = false;
             switch (keypress_message->key_code) {
                 case KEY_UP:
                     log_info("accept_client: [%d] pressed up", client->client_socket);
-                    client->y++;
+                    client->snake.y--;
+                    snake_changed = true;
                     break;
                 case KEY_DOWN:
                     log_info("accept_client: [%d] pressed down", client->client_socket);
-                    client->y--;
+                    client->snake.y++;
+                    snake_changed = true;
                     break;
                 case KEY_LEFT:
                     log_info("accept_client: [%d] pressed left", client->client_socket);
-                    client->x--;
+                    client->snake.x--;
+                    snake_changed = true;
                     break;
                 case KEY_RIGHT:
                     log_info("accept_client: [%d] pressed right", client->client_socket);
-                    client->x++;
+                    client->snake.x++;
+                    snake_changed = true;
                     break;
                 default:
                     break;
+            }
+            if (snake_changed) {
+                pthread_mutex_lock(&clients_mutex);
+                g_slist_foreach(clients, (GFunc) update_snake, client);
+                pthread_mutex_unlock(&clients_mutex);
             }
         } else {
             log_error("accept_client: Received unknown message type %d", message_type);
@@ -134,6 +151,12 @@ static void interrupt_handler(int dummy) {
     shutdown(server_socket, SHUT_RDWR);
 }
 
+static void send_current_clients_to_new_client(client_t *connected_client, client_t *new_client) {
+    msg_snake_update message;
+    message.snake = connected_client->snake;
+    send_message(new_client->client_socket, MSG_SNAKE_UPDATE, &message);
+}
+
 void run_server(char *host, unsigned short port_num) {
     signal(SIGINT, interrupt_handler);
 
@@ -160,18 +183,23 @@ void run_server(char *host, unsigned short port_num) {
         // Initialize client struct.
         client_t *client = malloc(sizeof(client_t));
         client->client_socket = client_socket;
-        client->x = 0;
-        client->y = 0;
+        client->snake.player_id = (uint32_t) client_socket;
+        client->snake.x = WIDTH / 2;
+        client->snake.y = HEIGHT / 2;
 
         // Run the client thread and track the thread in the client struct
         pthread_t client_thread;
         pthread_create(&client_thread, NULL, accept_client, client);
         client->client_thread = client_thread;
 
-        // Add the client to the global client list.
         pthread_mutex_lock(&clients_mutex);
-
+        // Send the existing players' data to the new player.
+        g_slist_foreach(clients, (GFunc) send_current_clients_to_new_client, client);
+        // Add the client to the global client list.
         clients = g_slist_append(clients, client);
+        // Send the new player's data to the existing players. This sends the client's data to itself as well, so that
+        // the client can know it's own starting position.
+        g_slist_foreach(clients, (GFunc) update_snake, client);
         pthread_mutex_unlock(&clients_mutex);
 
         log_info("run_server: Accepted connection from %s on fd [%d]", inet_ntoa(client_address.sin_addr),
