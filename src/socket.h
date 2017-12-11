@@ -1,6 +1,6 @@
-//
-// Created by Jeremy on 11/14/2017.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #ifndef CSNAKE_SOCKET_H
 #define CSNAKE_SOCKET_H

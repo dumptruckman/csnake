@@ -1,3 +1,6 @@
+/**
+ * Author: Jeremy Wood
+ */
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -27,19 +30,22 @@ static void client_signal_handler(int dummy) {
     log_debug("A client received SIGUSR1");
 }
 
+// Sends updated positions to the connected clients.
 static void update_snake(client_t *connected_client, client_t *changed_client) {
     msg_snake_update message;
     message.snake = changed_client->snake;
     send_message(connected_client->client_socket, MSG_SNAKE_UPDATE, &message);
 }
 
+// Lets connected clients know that a client disconnected.
 static void send_client_disconnect(client_t *connected_client, client_t *disconnect_client) {
     msg_client_disconnect message;
     message.player_id = (uint32_t) disconnect_client->client_socket;
     send_message(connected_client->client_socket, MSG_CLIENT_DISCONNECT, &message);
 }
 
-static void *accept_client(void *client_ptr) {
+// Client thread
+static void * accept_client(void *client_ptr) {
     // Block SIGINT since the main thread takes care of that.
     sigset_t signal_mask;
     sigemptyset(&signal_mask);
@@ -68,7 +74,6 @@ static void *accept_client(void *client_ptr) {
         }
 
         if (message_type == MSG_CLIENT_KEYPRESS) {
-            //int client_keypress = receive_keypress(client->client_socket);
             msg_client_keypress *keypress_message = (msg_client_keypress *) *message_ptr;
 
             log_info("accept_client: Received keypress from [%d]: %d", client->client_socket, keypress_message->key_code);
@@ -80,22 +85,22 @@ static void *accept_client(void *client_ptr) {
             bool snake_changed = false;
             switch (keypress_message->key_code) {
                 case KEY_UP:
-                    log_info("accept_client: [%d] pressed up", client->client_socket);
+                    log_debug("accept_client: [%d] pressed up", client->client_socket);
                     client->snake.y--;
                     snake_changed = true;
                     break;
                 case KEY_DOWN:
-                    log_info("accept_client: [%d] pressed down", client->client_socket);
+                    log_debug("accept_client: [%d] pressed down", client->client_socket);
                     client->snake.y++;
                     snake_changed = true;
                     break;
                 case KEY_LEFT:
-                    log_info("accept_client: [%d] pressed left", client->client_socket);
+                    log_debug("accept_client: [%d] pressed left", client->client_socket);
                     client->snake.x--;
                     snake_changed = true;
                     break;
                 case KEY_RIGHT:
-                    log_info("accept_client: [%d] pressed right", client->client_socket);
+                    log_debug("accept_client: [%d] pressed right", client->client_socket);
                     client->snake.x++;
                     snake_changed = true;
                     break;
@@ -103,6 +108,7 @@ static void *accept_client(void *client_ptr) {
                     break;
             }
             if (snake_changed) {
+                // Update the snake's position for each client.
                 pthread_mutex_lock(&clients_mutex);
                 g_slist_foreach(clients, (GFunc) update_snake, client);
                 pthread_mutex_unlock(&clients_mutex);

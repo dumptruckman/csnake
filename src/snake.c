@@ -1,5 +1,5 @@
-//
-// Created by jeremy on 12/10/17.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #include "snake.h"

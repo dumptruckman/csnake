@@ -2,3 +2,20 @@ Required libraries:
     pkg-config
     libglib2.0-dev
     libncurses5-dev
+
+To make the program, simply run `make`.
+To start a server:
+  ./csnake -s <address> <port>
+Example:
+  ./csnake -s 0.0.0.0 8080
+
+To end the server, use ctrl+c.
+
+
+To connect a client to a running server:
+  ./csnake <address> <port>
+Example:
+  ./csnake localhost 8080
+
+Use the arrow keys to control your icon.
+Press escape or ctrl+c to close the client.

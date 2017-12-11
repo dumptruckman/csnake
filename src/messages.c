@@ -1,6 +1,6 @@
-//
-// Created by jeremy on 12/9/17.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #include <malloc.h>
 #include <netinet/in.h>
@@ -12,6 +12,10 @@
 #include "log.h"
 #include "socket.h"
 #include "snake.h"
+
+//
+// Message structs are serialized using big endian byte order
+//
 
 static unsigned char * serialize_char(unsigned char *buffer, uint8_t value) {
     buffer[0] = value;

@@ -1,6 +1,6 @@
-//
-// Created by Jeremy on 11/14/2017.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #include <sys/types.h>
 #include <sys/socket.h>

@@ -1,6 +1,6 @@
-//
-// Created by Jeremy on 11/26/2017.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #ifndef CSNAKE_SERVER_H
 #define CSNAKE_SERVER_H

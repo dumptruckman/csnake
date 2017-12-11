@@ -1,6 +1,6 @@
-//
-// Created by Jeremy on 11/26/2017.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #ifndef CSNAKE_COMMON_H
 #define CSNAKE_COMMON_H

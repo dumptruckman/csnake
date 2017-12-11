@@ -1,6 +1,6 @@
-//
-// Created by jeremy on 12/9/17.
-//
+/**
+ * Author: Jeremy Wood
+ */
 
 #ifndef CSNAKE_MESSAGES_H
 #define CSNAKE_MESSAGES_H

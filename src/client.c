@@ -1,3 +1,6 @@
+/**
+ * Author: Jeremy Wood
+ */
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -30,20 +33,24 @@ static void exit_handler(int dummy) {
     running = false;
 }
 
+// Draw a snake to the screen
 static void draw_snake(snake_t *snake) {
     mvprintw(snake->y, snake->x, "O");
 }
 
+// Draw the game board
 static void update_game_board() {
     clear();
     g_slist_foreach(players, (GFunc) draw_snake, NULL);
     refresh();
 }
 
+// Checks if the given snake has the given id
 static int snake_has_same_id(const snake_t *snake, const uint32_t *player_id) {
     return snake->player_id - *player_id;
 }
 
+// Client process for reading messages sent from the server.
 static void read_messages(int client_fd) {
     signal(SIGUSR1, exit_handler);
 
@@ -52,7 +59,7 @@ static void read_messages(int client_fd) {
     events.events = POLL_IN;
 
     while (running) {
-        poll(&events, 1, 50);
+        poll(&events, 1, 50); // Block for 50 ms at most waiting for events on the client's fd.
 
         if (events.revents & POLLERR) {
             log_error("read_messages: client socket unexpectedly closed.");
@@ -67,7 +74,8 @@ static void read_messages(int client_fd) {
             return;
         }
 
-        if (events.revents & POLLIN) {
+        if (events.revents & POLLIN) { // Data can be read from the fd.
+            // Read the message from the server
             message_t message_type;
             void **message_ptr = malloc(sizeof(void *));
             ssize_t read_amount = recv_message(client_fd, &message_type, message_ptr);
@@ -78,6 +86,8 @@ static void read_messages(int client_fd) {
 
             if (message_type == MSG_SNAKE_UPDATE) {
                 msg_snake_update *message = (msg_snake_update *) *message_ptr;
+
+                // Find and update an existing snake or add a new one if none found.
                 GSList *existing_snake = g_slist_find_custom(players, &(message->snake.player_id),
                                                              (GCompareFunc) snake_has_same_id);
                 if (existing_snake) {
@@ -95,6 +105,8 @@ static void read_messages(int client_fd) {
                 log_info("read_messages: Received snake update for %d", message->snake.player_id);
             } else if (message_type == MSG_CLIENT_DISCONNECT) {
                 msg_client_disconnect *message = (msg_client_disconnect *) *message_ptr;
+
+                // Find and remove an existing snake or log error if none found.
                 GSList *existing_snake = g_slist_find_custom(players, &(message->player_id),
                                                              (GCompareFunc) snake_has_same_id);
                 if (existing_snake) {
@@ -132,12 +144,12 @@ static void user_input(int client_fd) {
     void *message;
 
     while (running) {
-        clear();
+        // Block until a key is pressed or interrupted
         input_key = getch();
 
         if (input_key < 0) {
             if (errno == EINTR) {
-                // Server shut down
+                // Server has shut down
                 break;
             }
             log_error("user_input: getch error: %s", strerror(errno));
@@ -150,12 +162,14 @@ static void user_input(int client_fd) {
             case KEY_DOWN:
             case KEY_LEFT:
             case KEY_RIGHT:
+                // Send the key stroke message to the server
                 message = malloc(sizeof(msg_client_keypress));
                 ((msg_client_keypress *) message)->key_code = (uint32_t) input_key;
                 send_message(client_fd, MSG_CLIENT_KEYPRESS, message);
                 free(message);
                 break;
-            case 27: // Escape - quit program
+            case 27: // Escape
+                // Send the key stroke message to the server and then terminate client
                 message = malloc(sizeof(msg_client_keypress));
                 ((msg_client_keypress *) message)->key_code = (uint32_t) input_key;
                 send_message(client_fd, MSG_CLIENT_KEYPRESS, message);
@@ -201,8 +215,10 @@ void run_client(char *host, unsigned short port_num) {
 
     child_pid = fork();
     if (child_pid == 0) {
+        // A child process reads messages from the server
         read_messages(client_fd);
     } else {
+        // The parent process reads input from the user and sends messages to the server.
         user_input(client_fd);
         int status;
         if (wait(&status) < 0) {
