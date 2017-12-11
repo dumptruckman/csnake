@@ -16,59 +16,14 @@
 #include "log.h"
 #include "messages.h"
 
-#define MAX_CLIENTS 30
-
 static GSList *clients = NULL;
 static pthread_mutex_t clients_mutex;
 static volatile bool running = true;
 
 static int server_socket;
 
-typedef struct {
-    int originator_fd;
-    char *message;
-} message_data_t;
-
-//static void send_message(gpointer data, gpointer user_data) {
-//    // Extract the desired types from the arguments.
-//    client_t *client = (client_t *) data;
-//    message_data_t *message_data = (message_data_t *) user_data;
-//
-//    if (message_data->originator_fd == client->client_socket) {
-//        // Don't send the message to the client the message came from.
-//        log_info("send_message: NOT sending \"%s\" from [%d] to fd [%d]", message_data->message, message_data->originator_fd, client->client_socket);
-//        return;
-//    }
-//
-//    log_info("send_message: Sending \"%s\" from [%d] to [%d]", message_data->message, message_data->originator_fd, client->client_socket);
-//    write(client->client_socket, message_data->message, strlen(message_data->message));
-//}
-
 static void client_signal_handler(int dummy) {
     log_debug("A client received SIGUSR1");
-}
-
-int receive_keypress(int client_fd) {
-    uint32_t result;
-    char *data = (char *) &result;
-    size_t left = sizeof(result);
-    ssize_t amount_read;
-
-    do {
-        amount_read = read(client_fd, data, left);
-        if (amount_read <= 0) {
-            if (errno == EINTR) {
-                // Thread was interrupted by main thread. Continuing will check running to see if shutdown should occur.
-                // A signal handler may be necessary for this.
-                return 0;
-            }
-        } else {
-            data += amount_read;
-            left -= amount_read;
-        }
-    } while (left > 0);
-
-    return ntohl(result);
 }
 
 static void *accept_client(void *client_ptr) {
@@ -81,7 +36,6 @@ static void *accept_client(void *client_ptr) {
     signal(SIGUSR1, client_signal_handler);
 
     client_t *client = (client_t *) client_ptr;
-    char message[MAX_MESSAGE_SIZE];
 
     while (running) {
         log_debug("accept_client: Awaiting messages from [%d]", client->client_socket);

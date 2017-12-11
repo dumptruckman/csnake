@@ -170,6 +170,8 @@ ssize_t ssend(int fd, void *message, size_t size) {
             left -= written_amount;
         }
     } while (left > 0);
+
+    return size;
 }
 
 ssize_t srecv(int fd, void *buffer, size_t size) {
